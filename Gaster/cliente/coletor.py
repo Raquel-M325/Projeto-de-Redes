@@ -1,6 +1,7 @@
 import os
 import platform
 import socket
+import psutil
 
 class Coletor:
     def pegou_cpu(self):
@@ -11,30 +12,32 @@ class Coletor:
 
     def pegou_disco(self):
         try:
-            if platform.system() == "Windows":
-
-            else: #caso for Linux
+            disco = psutil.disk_usage("/")
+            return round(disco.free / (1024 ** 3), 2) #quero em GB
 
         except: #não achar nenhum
             return None
         
     def pegou_memoria(self):
         try:
-
+            memoria = psutil.virtual_memory()
+            return round(memoria.available / (1024 ** 2), 2) #quero em MB
         except: 
             return None
 
     def pegou_sistema(self):
         try:
-
+            
+        
         except: 
             return "Desconhecido, não foi encontrado"
                 
 
     def pegou_rede(self):
-        try:
+        rede = []
+        nome_rede = socket.gethostname()
 
-        except: 
+        
 
 
     def coletou_tudo(self):
