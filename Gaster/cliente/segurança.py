@@ -14,3 +14,11 @@ class Seguranca:
         }
 
         return token
+
+    def validar_token(self, id_cliente, token_recebido):
+        if id_cliente not in self.tokens:
+            return False
+        
+        token_valido = self.tokens[id_cliente]["token"]
+        return token_recebido == token_valido
+
