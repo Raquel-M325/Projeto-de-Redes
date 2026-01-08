@@ -8,7 +8,7 @@ class Seguranca:
     def criar_token(self, id_cliente):
         token = secrets.token_hex(16)
 
-        self.tokens[id_cliente] = { //para cada cliente, terá seu token e tempo criado
+        self.tokens[id_cliente] = { #para cada cliente, terá seu token e tempo criado
             "token": token,
             "criado_em": time.time()
         }
