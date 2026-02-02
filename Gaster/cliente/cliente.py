@@ -2,6 +2,7 @@ import socket
 import json
 import time
 from coletor import Coletor
+from segurança import Seguranca
 
 class Cliente:
     def __init__(self, id_cliente, porta, ip):
@@ -10,6 +11,7 @@ class Cliente:
         self.porta_servidor = porta
         self.ip_servidor = ip
         self.coletor = Coletor()
+        self.seguranca = Seguranca()
 
     def conecta(self):
         self.socket.connect((self.ip_servidor, self.porta_servidor)) #endereço, é obrigatório ter (()) para dizer que é dupla
@@ -19,6 +21,7 @@ class Cliente:
             "Tipo" : "HELLO",
             "id_do_cliente" : self.id_cliente,
             "Informações" : self.coletor.coletou_tudo(),
+            "Segurança" : self.seguranca,
             "Tempo" : time.time()
 
         }
