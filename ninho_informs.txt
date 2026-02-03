@@ -1,0 +1,12 @@
+# A chave do cliente é o socket - porta de localização do cliente
+
+#def get_controle(self):
+        # Cria uma lista que guarda todas as portas "listadeportas"
+        # Informa a porta
+        # Se porta in listadeportas:
+            # inicia a conexão com o cliente
+            # Menu de escolha de mouse ou teclado:
+                # Controle do dispositivo
+                # opção de desconectar
+        # Se não:
+            # Coloca a mensagem de erro e volta para o menu do server
