@@ -21,3 +21,13 @@ class Servidor: #não está totalmente completo para responder varios clientes
 
         print("Mensagem recebida:")
         print(mensagem)
+
+
+#---------------------------------------RASCUNHO------------------------------------------------------
+
+    def UDP_envia_broadcast(self):
+        self.permissão = sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) #ele permite que a pessoa possa  ter o envio broadcast
+
+        while True:
+            
+
