@@ -67,6 +67,7 @@ class Client:
 
     def handle_tcp_connection(self, conn, addr):
         keyboard_ctl = Controller()
+        keyboard_active = False
         print(f"[TCP] Handler ativo para {addr}")
 
         while True:
@@ -76,23 +77,17 @@ class Client:
 
             for line in data.strip().split("\n"):
 
-                # ---------- MAC ----------
-                if line == "GET_MAC":
-                    response = f"MAC_ADDRESS;{self.mac}"
-                    conn.send(response.encode())
-                    print(f"[MAC enviado via TCP] {self.mac}")
-                    continue
-
-                # ---------- TECLADO ----------
                 if line == "KEYBOARD_START":
                     print("[Teclado remoto ativado]")
+                    keyboard_active = True
                     continue
 
                 if line == "KEYBOARD_STOP":
                     print("[Teclado remoto desativado]")
-                    return
+                    keyboard_active = False
+                    continue
 
-                if line.startswith("KEY;"):
+                if keyboard_active and line.startswith("KEY;"):
                     try:
                         _, action, key = line.split(";", 2)
 
@@ -100,6 +95,7 @@ class Client:
                             k = Key[key.replace("Key.", "")]
                         else:
                             k = key
+
                         if action == "DOWN":
                             keyboard_ctl.press(k)
                         elif action == "UP":
