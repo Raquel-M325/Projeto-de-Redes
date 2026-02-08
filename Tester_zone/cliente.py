@@ -3,7 +3,6 @@ import threading
 import random
 import time
 import uuid
-from pynput import keyboard
 
 BROADCAST_PORT = 50000
 BROADCAST_ADDR = "<broadcast>"
