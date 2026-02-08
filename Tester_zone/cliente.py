@@ -64,19 +64,24 @@ class Client:
     # --------------------------------------------------------
     # Handle do TCP
     # --------------------------------------------------------
-
     def handle_tcp_connection(self, conn, addr):
         keyboard_ctl = Controller()
         keyboard_active = False
         print(f"[TCP] Handler ativo para {addr}")
 
         while True:
-            data = conn.recv(1024).decode()
+            data = conn.recv(1024)
             if not data:
                 break
 
-            for line in data.strip().split("\n"):
+            for line in data.decode().strip().split("\n"):
 
+                # ---------- MAC ----------
+                if line == "GET_MAC":
+                    conn.send(f"MAC_ADDRESS;{self.mac}\n".encode())
+                    continue
+
+                # ---------- TECLADO ----------
                 if line == "KEYBOARD_START":
                     print("[Teclado remoto ativado]")
                     keyboard_active = True
@@ -86,6 +91,10 @@ class Client:
                     print("[Teclado remoto desativado]")
                     keyboard_active = False
                     continue
+                    
+                if line == "SESSION_END":
+                    print("[Servidor encerrou sessão de teclado]")
+                    break  # sai do loop sem fechar socket abruptamente
 
                 if keyboard_active and line.startswith("KEY;"):
                     try:
@@ -106,6 +115,7 @@ class Client:
 
         conn.close()
         print(f"[TCP] Conexão encerrada {addr}")
+
 
     def main_logic(self):
         while self.running:

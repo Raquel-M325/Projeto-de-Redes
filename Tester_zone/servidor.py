@@ -137,8 +137,6 @@ class DiscoveryServer:
             with keyboard.Listener(on_press=on_press, on_release=on_release):
                 pass
 
-            sock.close()
-
         except Exception as e:
             print("Erro no controle de teclado:", e)
     
