@@ -1,5 +1,5 @@
-from Cryptodome.Cipher import AES
-from Cryptodome.Random import get_random_bytes
+from Crypto.Cipher import AES
+from Crypto.Random import get_random_bytes
 import datetime
 
 class Seguranca:
