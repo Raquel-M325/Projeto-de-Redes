@@ -3,7 +3,8 @@ import threading
 import random
 import time
 import uuid
-from pynput.keyboard import Controller
+from pynput import keyboard
+from pynput.keyboard import Controller, Key
 
 BROADCAST_PORT = 50000
 BROADCAST_ADDR = "<broadcast>"
