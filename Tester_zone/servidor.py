@@ -2,6 +2,7 @@ import socket
 import threading
 import time
 from pynput import keyboard, mouse
+import struct
 from seguranca import Seguranca
 
 BROADCAST_PORT = 50000
@@ -25,19 +26,40 @@ class ClientInfo:
 
 class DiscoveryServer:
     def __init__(self):
-        self.clients = {}  # chave: (ip, tcp_port)
+        self.clients = {}
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("", BROADCAST_PORT))
         self.seguranca = Seguranca()
 
+    # -----------------------------------------------------------
+    # Funções de envio/recebimento seguro
+    # -----------------------------------------------------------
+    def send_encrypted(self, sock, mensagem: str):
+        dados = self.seguranca.encriptar(mensagem)
+        sock.sendall(struct.pack(">I", len(dados)) + dados)
+
+    def recv_encrypted(self, sock) -> str:
+        raw_len = sock.recv(4)
+        if len(raw_len) < 4:
+            raise ConnectionError("Conexão encerrada ou dados incompletos")
+        msg_len = struct.unpack(">I", raw_len)[0]
+        dados = b""
+        while len(dados) < msg_len:
+            chunk = sock.recv(msg_len - len(dados))
+            if not chunk:
+                raise ConnectionError("Conexão encerrada antes de receber todos os bytes")
+            dados += chunk
+        return self.seguranca.descriptar(dados)
+
+    # -----------------------------------------------------------
     # Escuta broadcasts UDP
+    # -----------------------------------------------------------
     def listen_broadcasts(self):
         print(f"[Servidor] Ouvindo broadcasts na porta {BROADCAST_PORT}...")
         while True:
             data, addr = self.sock.recvfrom(1024)
             msg = data.decode()
             ip = addr[0]
-
             print(f"[Broadcast de {ip}] {msg}")
 
             if msg.startswith("DISCOVER_REQUEST"):
@@ -51,25 +73,29 @@ class DiscoveryServer:
                 self.clients[key].update(msg)
                 self.sock.sendto("DISCOVER_RESPONSE".encode(), addr)
 
+    # -----------------------------------------------------------
     # Conecta TCP e autentica
+    # -----------------------------------------------------------
     def connect_and_auth(self, key):
+        if key not in self.clients:
+            print("Cliente não encontrado!")
+            return None
+
         ip, port = key
         client = self.clients[key]
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.connect((ip, port))
-            # Espera LOGIN_REQUEST
-            data = sock.recv(1024)
-            if self.seguranca.descriptar(data) != "LOGIN_REQUEST":
+            # Recebe LOGIN_REQUEST
+            if self.recv_encrypted(sock) != "LOGIN_REQUEST":
                 sock.close()
                 return None
 
             usuario = input(f"Digite usuário para {ip}:{port}: ")
             senha = input(f"Digite senha para {usuario}: ")
-            sock.send(self.seguranca.encriptar(f"{usuario};{senha}"))
+            self.send_encrypted(sock, f"{usuario};{senha}")
 
-            data = sock.recv(1024)
-            status = self.seguranca.descriptar(data)
+            status = self.recv_encrypted(sock)
             if status != "LOGIN_SUCCESS":
                 print("Autenticação falhou")
                 sock.close()
@@ -83,15 +109,16 @@ class DiscoveryServer:
             print(f"Erro ao conectar e autenticar: {e}")
             return None
 
+    # -----------------------------------------------------------
     # Solicitar MAC
+    # -----------------------------------------------------------
     def ask_mac_tcp(self, key):
         sock = self.connect_and_auth(key)
         if not sock:
             return
         try:
-            sock.send(self.seguranca.encriptar("GET_MAC"))
-            data = sock.recv(1024)
-            resp = self.seguranca.descriptar(data)
+            self.send_encrypted(sock, "GET_MAC")
+            resp = self.recv_encrypted(sock)
             if resp.startswith("MAC_ADDRESS;"):
                 mac = resp.split(";")[1]
                 self.clients[key].mac = mac
@@ -100,32 +127,35 @@ class DiscoveryServer:
         finally:
             sock.close()
 
+    # -----------------------------------------------------------
     # Controle teclado
+    # -----------------------------------------------------------
     def control_keyboard(self, key):
         sock = self.connect_and_auth(key)
         if not sock:
             return
         print(f"[Servidor] Controle de teclado para {key}")
 
+        self.send_encrypted(sock, "KEYBOARD_START")
+
         def on_press(k):
             try:
                 msg = f"KEY;DOWN;{k.char}"
             except AttributeError:
                 msg = f"KEY;DOWN;{k}"
-            sock.send(self.seguranca.encriptar(msg))
+            self.send_encrypted(sock, msg)
 
         def on_release(k):
             try:
                 msg = f"KEY;UP;{k.char}"
             except AttributeError:
                 msg = f"KEY;UP;{k}"
-            sock.send(self.seguranca.encriptar(msg))
+            self.send_encrypted(sock, msg)
             if k == keyboard.Key.esc:
-                sock.send(self.seguranca.encriptar("KEYBOARD_STOP"))
-                sock.send(self.seguranca.encriptar("SESSION_END"))
+                self.send_encrypted(sock, "KEYBOARD_STOP")
+                self.send_encrypted(sock, "SESSION_END")
                 return False
 
-        sock.send(self.seguranca.encriptar("KEYBOARD_START"))
         print(">>> Controle de teclado ativo (ESC para sair)")
         listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         listener.start()
@@ -133,14 +163,16 @@ class DiscoveryServer:
         sock.close()
         print("[Servidor] Sessão de teclado encerrada")
 
+    # -----------------------------------------------------------
     # Controle mouse
+    # -----------------------------------------------------------
     def control_mousepad(self, key):
         sock = self.connect_and_auth(key)
         if not sock:
             return
         print(f"[Servidor] Controle de mouse para {key}")
 
-        sock.send(self.seguranca.encriptar("MOUSE_START"))
+        self.send_encrypted(sock, "MOUSE_START")
         last_pos = None
 
         def on_move(x, y):
@@ -151,18 +183,18 @@ class DiscoveryServer:
             dx = x - last_pos[0]
             dy = y - last_pos[1]
             last_pos = (x, y)
-            sock.send(self.seguranca.encriptar(f"MOUSE;MOVE;{dx};{dy}"))
+            self.send_encrypted(sock, f"MOUSE;MOVE;{dx};{dy}")
 
         def on_click(x, y, button, pressed):
             if button == mouse.Button.middle and pressed:
-                sock.send(self.seguranca.encriptar("MOUSE_STOP"))
-                sock.send(self.seguranca.encriptar("SESSION_END"))
+                self.send_encrypted(sock, "MOUSE_STOP")
+                self.send_encrypted(sock, "SESSION_END")
                 return False
             action = "DOWN" if pressed else "UP"
-            sock.send(self.seguranca.encriptar(f"MOUSE;CLICK;{button.name};{action}"))
+            self.send_encrypted(sock, f"MOUSE;CLICK;{button.name};{action}")
 
         def on_scroll(x, y, dx, dy):
-            sock.send(self.seguranca.encriptar(f"MOUSE;SCROLL;{dx};{dy}"))
+            self.send_encrypted(sock, f"MOUSE;SCROLL;{dx};{dy}")
 
         print(">>> Controle de mouse ativo (BOTÃO DO MEIO para sair)")
         with mouse.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll) as listener:
@@ -171,7 +203,9 @@ class DiscoveryServer:
         sock.close()
         print("[Servidor] Sessão de mouse encerrada")
 
-    # Menu interativo
+    # -----------------------------------------------------------
+    # Menu
+    # -----------------------------------------------------------
     def menu(self):
         while True:
             print("\n=== MENU SERVIDOR ===")
@@ -209,10 +243,13 @@ class DiscoveryServer:
                 case _:
                     print("Opção inválida!")
 
+    # -----------------------------------------------------------
     # Start
+    # -----------------------------------------------------------
     def start(self):
         threading.Thread(target=self.listen_broadcasts, daemon=True).start()
         self.menu()
+
 
 if __name__ == "__main__":
     DiscoveryServer().start()
