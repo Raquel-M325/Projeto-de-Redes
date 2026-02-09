@@ -6,6 +6,7 @@ class Seguranca:
     def __init__(self):
         self.chave = get_random_bytes(16)  # chave AES aleatória
         self.arquivo_auditoria = "auditoria.txt"
+        # Usuários com senhas (pode adicionar perfis diferentes)
         self.usuarios = {
             "admin": "1234",
             "user": "abcd"
@@ -20,19 +21,20 @@ class Seguranca:
             self.auditar("FALHA_LOGIN", usuario)
             return False
 
-    # Encripta uma mensagem
+    # Encripta uma mensagem (AES CFB)
     def encriptar(self, mensagem):
         iv = get_random_bytes(16)
         cipher = AES.new(self.chave, AES.MODE_CFB, iv)
         return iv + cipher.encrypt(mensagem.encode())
 
-    # Descripta uma mensagem
+    # Descripta uma mensagem (AES CFB)
     def descriptar(self, dados):
         iv = dados[:16]
         cipher = AES.new(self.chave, AES.MODE_CFB, iv)
         return cipher.decrypt(dados[16:]).decode()
 
-    # Auditoria de ações
-    def auditar(self, acao, usuario):
+    # Auditoria de ações (login, teclado, mouse, comandos)
+    def auditar(self, acao, usuario="-", detalhes=""):
+        now = datetime.datetime.now()
         with open(self.arquivo_auditoria, "a") as f:
-            f.write(f"{datetime.datetime.now()} | {usuario} | {acao}\n")
+            f.write(f"{now} | Usuario: {usuario} | Acao: {acao} | Detalhes: {detalhes}\n")
