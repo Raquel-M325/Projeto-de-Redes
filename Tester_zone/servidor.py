@@ -153,9 +153,12 @@ class DiscoveryServer:
             sock.connect((ip, port))
             sock.send(b"MOUSE_START\n")
             last_pos = None
+            mouse_active = True  # flag para controlar o listener
 
             def on_move(x, y):
                 nonlocal last_pos
+                if not mouse_active:
+                    return False
                 if last_pos is None:
                     last_pos = (x, y)
                     return
@@ -165,24 +168,33 @@ class DiscoveryServer:
                 try:
                     sock.send(f"MOUSE;MOVE;{dx};{dy}\n".encode())
                 except (ConnectionAbortedError, ConnectionResetError):
-                    return False
+                    pass  # ignora, não encerra listener
 
             def on_click(x, y, button, pressed):
-                try:
-                    if button == mouse.Button.middle and pressed:
+                nonlocal mouse_active
+                if button == mouse.Button.middle and pressed:
+                    mouse_active = False
+                    try:
                         sock.send(b"MOUSE_STOP\n")
                         sock.send(b"SESSION_END\n")
-                        return False
+                    except:
+                        pass
+                    return False
+                if not mouse_active:
+                    return False
+                try:
                     action = "DOWN" if pressed else "UP"
                     sock.send(f"MOUSE;CLICK;{button.name};{action}\n".encode())
                 except (ConnectionAbortedError, ConnectionResetError):
-                    return False
+                    pass
 
             def on_scroll(x, y, dx, dy):
+                if not mouse_active:
+                    return False
                 try:
                     sock.send(f"MOUSE;SCROLL;{dx};{dy}\n".encode())
                 except (ConnectionAbortedError, ConnectionResetError):
-                    return False
+                    pass
 
             print(">>> Controle de mouse ativo (BOTÃO DO MEIO para sair)")
             with mouse.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll) as listener:
