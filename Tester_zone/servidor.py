@@ -65,11 +65,9 @@ class DiscoveryServer:
             if msg.startswith("DISCOVER_REQUEST"):
                 tcp_port = int(msg.split("=")[1])
                 key = (ip, tcp_port)
-
                 if key not in self.clients:
                     self.clients[key] = ClientInfo(ip, tcp_port)
                     print(f"[Novo cliente] {ip}:{tcp_port}")
-
                 self.clients[key].update(msg)
                 self.sock.sendto("DISCOVER_RESPONSE".encode(), addr)
 
@@ -80,7 +78,6 @@ class DiscoveryServer:
         if key not in self.clients:
             print("Cliente não encontrado!")
             return None
-
         ip, port = key
         client = self.clients[key]
         try:
@@ -90,21 +87,17 @@ class DiscoveryServer:
             if self.recv_encrypted(sock) != "LOGIN_REQUEST":
                 sock.close()
                 return None
-
             usuario = input(f"Digite usuário para {ip}:{port}: ")
             senha = input(f"Digite senha para {usuario}: ")
             self.send_encrypted(sock, f"{usuario};{senha}")
-
             status = self.recv_encrypted(sock)
             if status != "LOGIN_SUCCESS":
                 print("Autenticação falhou")
                 sock.close()
                 return None
-
             client.usuario = usuario
             self.seguranca.auditar("LOGIN", usuario, f"Cliente {ip}:{port}")
             return sock
-
         except Exception as e:
             print(f"Erro ao conectar e autenticar: {e}")
             return None
@@ -135,7 +128,6 @@ class DiscoveryServer:
         if not sock:
             return
         print(f"[Servidor] Controle de teclado para {key}")
-
         self.send_encrypted(sock, "KEYBOARD_START")
 
         def on_press(k):
@@ -156,7 +148,6 @@ class DiscoveryServer:
                 self.send_encrypted(sock, "SESSION_END")
                 return False
 
-        print(">>> Controle de teclado ativo (ESC para sair)")
         listener = keyboard.Listener(on_press=on_press, on_release=on_release)
         listener.start()
         listener.join()
@@ -171,7 +162,6 @@ class DiscoveryServer:
         if not sock:
             return
         print(f"[Servidor] Controle de mouse para {key}")
-
         self.send_encrypted(sock, "MOUSE_START")
         last_pos = None
 
@@ -196,7 +186,6 @@ class DiscoveryServer:
         def on_scroll(x, y, dx, dy):
             self.send_encrypted(sock, f"MOUSE;SCROLL;{dx};{dy}")
 
-        print(">>> Controle de mouse ativo (BOTÃO DO MEIO para sair)")
         with mouse.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll) as listener:
             listener.join()
 
@@ -219,7 +208,6 @@ class DiscoveryServer:
 
             match op:
                 case "1":
-                    print("\n--- CLIENTES ---")
                     for key, info in self.clients.items():
                         print(f"{key} -> {info}")
                 case "2":
@@ -238,7 +226,6 @@ class DiscoveryServer:
                     port = int(input("Digite a porta TCP do cliente: "))
                     self.control_mousepad((ip, port))
                 case "0":
-                    print("Saindo...")
                     exit()
                 case _:
                     print("Opção inválida!")

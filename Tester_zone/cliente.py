@@ -82,22 +82,18 @@ class Client:
         mouse_active = False
 
         try:
-            # Primeiro envia pedido de login
+            # Autenticação
             self.send_encrypted(conn, "LOGIN_REQUEST")
             login_data = self.recv_encrypted(conn)
             usuario, senha = login_data.split(";", 1)
-
             if not self.seguranca.autenticar(usuario, senha):
                 self.send_encrypted(conn, "LOGIN_FAILED")
                 conn.close()
                 return
-
             self.send_encrypted(conn, "LOGIN_SUCCESS")
 
-            buffer = ""
             while True:
-                data = self.recv_encrypted(conn)
-                line = data.strip()
+                line = self.recv_encrypted(conn).strip()
 
                 # ---------- MAC ----------
                 if line == "GET_MAC":
@@ -136,7 +132,6 @@ class Client:
                                 continue
                         else:
                             k = key
-
                         if action == "DOWN":
                             keyboard_ctl.press(k)
                         elif action == "UP":
