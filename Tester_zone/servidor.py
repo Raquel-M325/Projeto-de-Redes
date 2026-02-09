@@ -57,13 +57,12 @@ class DiscoveryServer:
             senha = input(f"Digite senha para {ip}:{port}: ")
             sock.send(f"LOGIN;{usuario};{senha}\n".encode())
             resposta = sock.recv(1024).decode().strip()
+            sock.close()
             if resposta == "LOGIN_OK":
                 self.seguranca.auditar("CLIENTE_AUTENTICADO", f"{ip}:{port}", usuario)
-                sock.close()
                 return True
             else:
                 self.seguranca.auditar("CLIENTE_FALHA_AUTENTICACAO", f"{ip}:{port}", usuario)
-                sock.close()
                 print("Falha na autenticação.")
                 return False
         except Exception as e:
@@ -109,17 +108,27 @@ class DiscoveryServer:
                     msg = f"KEY;DOWN;{k.char}\n"
                 except AttributeError:
                     msg = f"KEY;DOWN;{k}\n"
-                sock.send(msg.encode())
+                try:
+                    sock.send(msg.encode())
+                except (ConnectionAbortedError, ConnectionResetError):
+                    return False
 
             def on_release(k):
                 try:
                     msg = f"KEY;UP;{k.char}\n"
                 except AttributeError:
                     msg = f"KEY;UP;{k}\n"
-                sock.send(msg.encode())
+                try:
+                    sock.send(msg.encode())
+                except (ConnectionAbortedError, ConnectionResetError):
+                    return False
+
                 if k == keyboard.Key.esc:
-                    sock.send(b"KEYBOARD_STOP\n")
-                    sock.send(b"SESSION_END\n")
+                    try:
+                        sock.send(b"KEYBOARD_STOP\n")
+                        sock.send(b"SESSION_END\n")
+                    except:
+                        pass
                     return False
 
             print(">>> Controle de teclado ativo (ESC para sair)")
@@ -153,18 +162,27 @@ class DiscoveryServer:
                 dx = x - last_pos[0]
                 dy = y - last_pos[1]
                 last_pos = (x, y)
-                sock.send(f"MOUSE;MOVE;{dx};{dy}\n".encode())
+                try:
+                    sock.send(f"MOUSE;MOVE;{dx};{dy}\n".encode())
+                except (ConnectionAbortedError, ConnectionResetError):
+                    return False
 
             def on_click(x, y, button, pressed):
-                if button == mouse.Button.middle and pressed:
-                    sock.send(b"MOUSE_STOP\n")
-                    sock.send(b"SESSION_END\n")
+                try:
+                    if button == mouse.Button.middle and pressed:
+                        sock.send(b"MOUSE_STOP\n")
+                        sock.send(b"SESSION_END\n")
+                        return False
+                    action = "DOWN" if pressed else "UP"
+                    sock.send(f"MOUSE;CLICK;{button.name};{action}\n".encode())
+                except (ConnectionAbortedError, ConnectionResetError):
                     return False
-                action = "DOWN" if pressed else "UP"
-                sock.send(f"MOUSE;CLICK;{button.name};{action}\n".encode())
 
             def on_scroll(x, y, dx, dy):
-                sock.send(f"MOUSE;SCROLL;{dx};{dy}\n".encode())
+                try:
+                    sock.send(f"MOUSE;SCROLL;{dx};{dy}\n".encode())
+                except (ConnectionAbortedError, ConnectionResetError):
+                    return False
 
             print(">>> Controle de mouse ativo (BOTÃO DO MEIO para sair)")
             with mouse.Listener(on_move=on_move, on_click=on_click, on_scroll=on_scroll) as listener:
