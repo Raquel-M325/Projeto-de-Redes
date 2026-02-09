@@ -16,15 +16,13 @@ class Client:
         self.tcp_port = random.randint(20000, 40000)
         self.running = True
         self.mac = self.get_local_mac()
-        self.seguranca = Seguranca()  # instancia de segurança
+        self.seguranca = Seguranca()
 
     def get_local_mac(self):
         mac_int = uuid.getnode()
         return ":".join(f"{(mac_int >> 8*i) & 0xff:02x}" for i in reversed(range(6)))
 
-    # -----------------------------------------------------------
-    # UDP: broadcast de descoberta
-    # -----------------------------------------------------------
+    # --------------------- Broadcast UDP ---------------------
     def send_broadcast(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -33,9 +31,7 @@ class Client:
             sock.sendto(msg.encode(), (BROADCAST_ADDR, BROADCAST_PORT))
             time.sleep(BROADCAST_DELAY)
 
-    # -----------------------------------------------------------
-    # TCP: servidor interno para responder comandos
-    # -----------------------------------------------------------
+    # --------------------- TCP Server ------------------------
     def tcp_server(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("", self.tcp_port))
@@ -50,19 +46,33 @@ class Client:
                 daemon=True
             ).start()
 
-    # --------------------------------------------------------
-    # Handle do TCP
-    # --------------------------------------------------------
+    # --------------------- Handle TCP ------------------------
     def handle_tcp_connection(self, conn, addr):
         keyboard_ctl = Controller()
         keyboard_active = False
-
         mouse_ctl = MouseController()
         mouse_active = False
-
         buffer = ""
+
         self.seguranca.auditar("CLIENTE_CONECTADO", f"{addr[0]}:{addr[1]}")
 
+        # ---------------- Autenticação ----------------
+        conn.send(b"LOGIN_REQUEST\n")
+        data = conn.recv(1024).decode().strip()
+        if data.startswith("LOGIN;"):
+            _, usuario, senha = data.split(";", 2)
+            if self.seguranca.autenticar(usuario, senha):
+                conn.send(b"LOGIN_OK\n")
+            else:
+                conn.send(b"LOGIN_FAIL\n")
+                self.seguranca.auditar("CONEXAO_RECUSADA", f"{addr[0]}:{addr[1]}", usuario)
+                conn.close()
+                return
+        else:
+            conn.close()
+            return
+
+        # ---------------- Loop TCP ----------------
         while True:
             try:
                 data = conn.recv(1024)
@@ -78,33 +88,27 @@ class Client:
                     # ---------- MAC ----------
                     if line == "GET_MAC":
                         conn.send(f"MAC_ADDRESS;{self.mac}\n".encode())
-                        self.seguranca.auditar("MAC_ENVIADO", f"{addr[0]}:{addr[1]}", self.mac)
                         continue
 
-                    # ---------- TECLADO ----------
+                    # ---------- Teclado ----------
                     if line == "KEYBOARD_START":
                         keyboard_active = True
-                        self.seguranca.auditar("TECLADO_ATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
                     if line == "KEYBOARD_STOP":
                         keyboard_active = False
-                        self.seguranca.auditar("TECLADO_DESATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
-                    
-                    # ---------- MOUSE ----------
+
+                    # ---------- Mouse ----------
                     if line == "MOUSE_START":
                         mouse_active = True
-                        self.seguranca.auditar("MOUSE_ATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
                     if line == "MOUSE_STOP":
                         mouse_active = False
-                        self.seguranca.auditar("MOUSE_DESATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
 
                     if line == "SESSION_END":
                         keyboard_active = False
                         mouse_active = False
-                        self.seguranca.auditar("SESSAO_FINALIZADA", f"{addr[0]}:{addr[1]}")
                         conn.close()
                         return
 
@@ -112,9 +116,8 @@ class Client:
                         try:
                             _, action, key = line.split(";", 2)
                             if key.startswith("Key."):
-                                try:
-                                    k = getattr(Key, key.replace("Key.", ""))
-                                except AttributeError:
+                                k = getattr(Key, key.replace("Key.", ""), None)
+                                if k is None:
                                     continue
                             else:
                                 k = key
@@ -151,11 +154,8 @@ class Client:
 
         conn.close()
         print(f"[TCP] Conexão encerrada {addr}")
-        self.seguranca.auditar("CONEXAO_ENCERRADA", f"{addr[0]}:{addr[1]}")
 
-    # --------------------------------------------------------
-    # Main
-    # --------------------------------------------------------
+    # --------------------- Start ---------------------------
     def start(self):
         threading.Thread(target=self.send_broadcast, daemon=True).start()
         threading.Thread(target=self.tcp_server, daemon=True).start()
