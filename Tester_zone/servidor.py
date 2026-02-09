@@ -1,15 +1,11 @@
 import socket
 import threading
 import time
-from pynput import keyboard
-from seguranca import Seguranca
-import datetime
+from pynput import keyboard, mouse
 
 BROADCAST_PORT = 50000
 
-# -------------------------
-# CLIENTE
-# -------------------------
+
 class ClientInfo:
     def __init__(self, ip, tcp_port):
         self.ip = ip
@@ -17,8 +13,6 @@ class ClientInfo:
         self.last_seen = time.time()
         self.last_msg = ""
         self.mac = None
-        self.seguranca = Seguranca()
-        self.autenticado = False  # controle de login
 
     def update(self, msg):
         self.last_msg = msg
@@ -26,30 +20,18 @@ class ClientInfo:
 
     def __repr__(self):
         age = round(time.time() - self.last_seen, 1)
-        return f"{self.ip}:{self.tcp_port} | MAC={self.mac} | ÚltimaMsg='{self.last_msg}' | {age}s atrás"
+        return f"{self.ip}:{self.tcp_port} | MAC={self.mac} | UltimaMsg='{self.last_msg}' | {age}s atrás"
 
 
-# -------------------------
-# SERVIDOR
-# -------------------------
 class DiscoveryServer:
     def __init__(self):
         self.clients = {}  # chave: (ip, tcp_port)
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.sock.bind(("", BROADCAST_PORT))
-        self.log_file = "auditoria.log"
 
-    # -------------------------
-    # AUDITORIA
-    # -------------------------
-    def log_acao(self, acao, key):
-        ip, port = key
-        with open(self.log_file, "a") as f:
-            f.write(f"{datetime.datetime.now()} | {acao} | Cliente: {ip}:{port}\n")
-
-    # -------------------------
+    # ----------------------------------------------------------------
     # ESCUTA BROADCASTS
-    # -------------------------
+    # ----------------------------------------------------------------
     def listen_broadcasts(self):
         print(f"[Servidor] Ouvindo broadcasts na porta {BROADCAST_PORT}...")
         while True:
@@ -66,90 +48,67 @@ class DiscoveryServer:
                 if key not in self.clients:
                     self.clients[key] = ClientInfo(ip, tcp_port)
                     print(f"[Novo cliente] {ip}:{tcp_port}")
-                    self.log_acao("Cliente registrado", key)
 
                 self.clients[key].update(msg)
                 self.sock.sendto("DISCOVER_RESPONSE".encode(), addr)
 
-    # -------------------------
+    # ----------------------------------------------------------------
     # SOLICITA MAC via TCP
-    # -------------------------
+    # ----------------------------------------------------------------
     def ask_mac_tcp(self, key):
         if key not in self.clients:
             print("Cliente não encontrado!")
             return
 
-        client = self.clients[key]
-
+        ip, port = key
+        print(f"[Servidor] Conectando via TCP em {ip}:{port} ...")
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((client.ip, client.tcp_port))
-
-            # LOGIN
-            sock.send(b"LOGIN;admin;1234\n")
-            resp = sock.recv(1024)
-            if client.seguranca.descriptar(resp) != "LOGIN_OK":
-                print(f"[Servidor] Cliente {key} não autenticou")
-                self.log_acao("Falha autenticação", key)
-                sock.close()
-                return
-            client.autenticado = True
-            self.log_acao("Cliente autenticado", key)
-
-            # Solicita MAC
-            sock.send(client.seguranca.encriptar("GET_MAC"))
-            resp_mac = sock.recv(1024)
-            mac = client.seguranca.descriptar(resp_mac)
-            client.mac = mac
-            print(f"[MAC recebido] {key} => {mac}")
-            self.log_acao("Solicitou MAC", key)
-
+            sock.connect((ip, port))
+            sock.send(b"GET_MAC\n")
+            response = sock.recv(1024).decode().strip()
             sock.close()
+
+            if response.startswith("MAC_ADDRESS;"):
+                mac = response.split(";")[1]
+                self.clients[key].mac = mac
+                print(f"[MAC recebido via TCP] {ip}:{port} => {mac}")
+
         except Exception as e:
             print(f"Erro ao conectar via TCP: {e}")
-            self.log_acao(f"Erro conexão: {e}", key)
 
-    # -------------------------
+    # ----------------------------------------------------------------
     # CONTROLE REMOTO DE TECLADO
-    # -------------------------
+    # ----------------------------------------------------------------
     def control_keyboard(self, key):
         if key not in self.clients:
             print("Cliente não encontrado!")
             return
 
-        client = self.clients[key]
-        print(f"[Servidor] Conectando ao cliente {key} para controle de teclado")
-
+        ip, port = key
+        print(f"[Servidor] Conectando ao cliente {ip}:{port} para controle de teclado")
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            sock.connect((client.ip, client.tcp_port))
-
-            # LOGIN
-            sock.send(b"LOGIN;admin;1234\n")
-            resp = sock.recv(1024)
-            if client.seguranca.descriptar(resp) != "LOGIN_OK":
-                print(f"[Servidor] Cliente {key} não autenticou")
-                sock.close()
-                return
-
-            sock.send(client.seguranca.encriptar("KEYBOARD_START"))
+            sock.connect((ip, port))
+            sock.send(b"KEYBOARD_START\n")
 
             def on_press(k):
                 try:
                     msg = f"KEY;DOWN;{k.char}\n"
                 except AttributeError:
                     msg = f"KEY;DOWN;{k}\n"
-                sock.send(client.seguranca.encriptar(msg))
+                sock.send(msg.encode())
 
             def on_release(k):
                 try:
                     msg = f"KEY;UP;{k.char}\n"
                 except AttributeError:
                     msg = f"KEY;UP;{k}\n"
-                sock.send(client.seguranca.encriptar(msg))
+                sock.send(msg.encode())
+
                 if k == keyboard.Key.esc:
-                    sock.send(client.seguranca.encriptar("KEYBOARD_STOP"))
-                    sock.send(client.seguranca.encriptar("SESSION_END"))
+                    sock.send(b"KEYBOARD_STOP\n")
+                    sock.send(b"SESSION_END\n")
                     return False
 
             print(">>> Controle de teclado ativo (ESC para sair)")
@@ -159,15 +118,71 @@ class DiscoveryServer:
 
             sock.close()
             print("[Servidor] Sessão de teclado encerrada")
-            self.log_acao("Controle de teclado encerrado", key)
 
         except Exception as e:
             print(f"Erro no controle de teclado: {e}")
-            self.log_acao(f"Erro teclado: {e}", key)
 
-    # -------------------------
+    # ----------------------------------------------------------
+    # Mouse
+    # ----------------------------------------------------------
+
+    def control_mousepad(self, key):
+        if key not in self.clients:
+            print("Cliente não encontrado!")
+            return
+
+        ip, port = key
+        print(f"[Servidor] Conectando ao cliente {ip}:{port} para controle de mouse")
+
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect((ip, port))
+            sock.send(b"MOUSE_START\n")
+
+            last_pos = None
+
+            def on_move(x, y):
+                nonlocal last_pos
+                if last_pos is None:
+                    last_pos = (x, y)
+                    return
+                dx = x - last_pos[0]
+                dy = y - last_pos[1]
+                last_pos = (x, y)
+                sock.send(f"MOUSE;MOVE;{dx};{dy}\n".encode())
+
+            def on_click(x, y, button, pressed):
+                # botão do meio encerra sessão
+                if button == mouse.Button.middle and pressed:
+                    sock.send(b"MOUSE_STOP\n")
+                    sock.send(b"SESSION_END\n")
+                    return False  # encerra o mouse.Listener
+
+                action = "DOWN" if pressed else "UP"
+                sock.send(f"MOUSE;CLICK;{button.name};{action}\n".encode())
+
+            def on_scroll(x, y, dx, dy):
+                sock.send(f"MOUSE;SCROLL;{dx};{dy}\n".encode())
+
+            print(">>> Controle de mouse ativo (BOTÃO DO MEIO para sair)")
+            with mouse.Listener(
+                on_move=on_move,
+                on_click=on_click,
+                on_scroll=on_scroll
+            ) as listener:
+                listener.join()
+
+            sock.close()
+            print("[Servidor] Sessão de mouse encerrada")
+
+        except Exception as e:
+            print(f"Erro no controle de mouse: {e}")
+
+
+
+    # ----------------------------------------------------------------
     # MENU INTERATIVO
-    # -------------------------
+    # ----------------------------------------------------------------
     def menu(self):
         while True:
             print("\n=== MENU SERVIDOR ===")
@@ -175,6 +190,7 @@ class DiscoveryServer:
             print("2 - Solicitar MAC de um cliente")
             print("3 - Solicitar MAC de todos os clientes")
             print("4 - Controlar teclado de um cliente")
+            print("5 - Controlar mouse de um cliente")
             print("0 - Sair")
             op = input("> ")
 
@@ -183,26 +199,36 @@ class DiscoveryServer:
                     print("\n--- CLIENTES ---")
                     for key, info in self.clients.items():
                         print(f"{key} -> {info}")
+
                 case "2":
                     ip = input("Digite o IP: ")
                     port = int(input("Digite a porta TCP do cliente: "))
                     self.ask_mac_tcp((ip, port))
+
                 case "3":
                     for key in self.clients:
                         self.ask_mac_tcp(key)
+
                 case "4":
                     ip = input("Digite o IP do cliente: ")
                     port = int(input("Digite a porta TCP do cliente: "))
                     self.control_keyboard((ip, port))
+
+                case "5":
+                    ip = input("Digite o IP do cliente: ")
+                    port = int(input("Digite a porta TCP do cliente: "))
+                    self.control_mousepad((ip, port))
+
                 case "0":
                     print("Saindo...")
                     exit()
+
                 case _:
                     print("Opção inválida!")
 
-    # -------------------------
+    # ----------------------------------------------------------------
     # START
-    # -------------------------
+    # ----------------------------------------------------------------
     def start(self):
         threading.Thread(target=self.listen_broadcasts, daemon=True).start()
         self.menu()
