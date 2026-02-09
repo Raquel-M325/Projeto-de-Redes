@@ -5,6 +5,7 @@ import time
 import uuid
 from pynput.keyboard import Controller, Key
 from pynput.mouse import Controller as MouseController, Button
+from seguranca import Seguranca
 
 BROADCAST_PORT = 50000
 BROADCAST_ADDR = "<broadcast>"
@@ -15,6 +16,7 @@ class Client:
         self.tcp_port = random.randint(20000, 40000)
         self.running = True
         self.mac = self.get_local_mac()
+        self.seguranca = Seguranca()  # instancia de segurança
 
     def get_local_mac(self):
         mac_int = uuid.getnode()
@@ -58,53 +60,61 @@ class Client:
         mouse_ctl = MouseController()
         mouse_active = False
 
-        buffer = b""
+        buffer = ""
+        self.seguranca.auditar("CLIENTE_CONECTADO", f"{addr[0]}:{addr[1]}")
+
         while True:
             try:
                 data = conn.recv(1024)
                 if not data:
                     break
-                buffer += data
-                while b"\n" in buffer:
-                    line_bytes, buffer = buffer.split(b"\n", 1)
-                    line = line_bytes.decode(errors="ignore").strip()
+                buffer += data.decode()
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+                    line = line.strip()
                     if not line:
                         continue
 
                     # ---------- MAC ----------
                     if line == "GET_MAC":
                         conn.send(f"MAC_ADDRESS;{self.mac}\n".encode())
+                        self.seguranca.auditar("MAC_ENVIADO", f"{addr[0]}:{addr[1]}", self.mac)
                         continue
 
                     # ---------- TECLADO ----------
                     if line == "KEYBOARD_START":
                         keyboard_active = True
+                        self.seguranca.auditar("TECLADO_ATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
                     if line == "KEYBOARD_STOP":
                         keyboard_active = False
+                        self.seguranca.auditar("TECLADO_DESATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
-
+                    
                     # ---------- MOUSE ----------
                     if line == "MOUSE_START":
                         mouse_active = True
+                        self.seguranca.auditar("MOUSE_ATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
                     if line == "MOUSE_STOP":
                         mouse_active = False
+                        self.seguranca.auditar("MOUSE_DESATIVADO", f"{addr[0]}:{addr[1]}")
                         continue
 
                     if line == "SESSION_END":
                         keyboard_active = False
                         mouse_active = False
+                        self.seguranca.auditar("SESSAO_FINALIZADA", f"{addr[0]}:{addr[1]}")
                         conn.close()
                         return
 
-                    # ---------- AÇÕES TECLADO ----------
                     if keyboard_active and line.startswith("KEY;"):
                         try:
                             _, action, key = line.split(";", 2)
                             if key.startswith("Key."):
-                                k = getattr(Key, key.replace("Key.", ""), None)
-                                if k is None:
+                                try:
+                                    k = getattr(Key, key.replace("Key.", ""))
+                                except AttributeError:
                                     continue
                             else:
                                 k = key
@@ -113,9 +123,8 @@ class Client:
                             elif action == "UP":
                                 keyboard_ctl.release(k)
                         except Exception as e:
-                            print("Erro tecla:", e)
+                            print("Erro ao processar tecla:", e)
 
-                    # ---------- AÇÕES MOUSE ----------
                     if mouse_active and line.startswith("MOUSE;"):
                         try:
                             parts = line.split(";")
@@ -142,6 +151,7 @@ class Client:
 
         conn.close()
         print(f"[TCP] Conexão encerrada {addr}")
+        self.seguranca.auditar("CONEXAO_ENCERRADA", f"{addr[0]}:{addr[1]}")
 
     # --------------------------------------------------------
     # Main
@@ -152,6 +162,7 @@ class Client:
         print(f"[Cliente] TCP_PORT={self.tcp_port} | MAC={self.mac}")
         while self.running:
             time.sleep(5)
+
 
 if __name__ == "__main__":
     Client().start()
