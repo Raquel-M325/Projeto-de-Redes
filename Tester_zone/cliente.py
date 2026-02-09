@@ -23,7 +23,6 @@ class Client:
         mac_int = uuid.getnode()
         return ":".join(f"{(mac_int >> 8*i) & 0xff:02x}" for i in reversed(range(6)))
 
-    # Broadcast UDP
     def send_broadcast(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -32,17 +31,14 @@ class Client:
             sock.sendto(msg.encode(), (BROADCAST_ADDR, BROADCAST_PORT))
             time.sleep(BROADCAST_DELAY)
 
-    # TCP server
     def tcp_server(self):
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.bind(("", self.tcp_port))
         sock.listen(5)
-        print(f"[Cliente] Servidor TCP escutando na porta {self.tcp_port}...")
         while self.running:
             conn, addr = sock.accept()
             threading.Thread(target=self.handle_tcp_connection, args=(conn, addr), daemon=True).start()
 
-    # Handle TCP
     def handle_tcp_connection(self, conn, addr):
         keyboard_ctl = Controller()
         mouse_ctl = MouseController()
@@ -62,10 +58,9 @@ class Client:
                     if not line:
                         continue
 
-                    # ---------- LOGIN ----------
-                    if line.startswith("LOGIN_REQUEST"):
-                        usuario = input(f"[{addr[0]}] Digite usuário: ")
-                        senha = input(f"[{addr[0]}] Digite senha: ")
+                    # LOGIN automático
+                    if line.startswith("LOGIN;"):
+                        _, usuario, senha = line.split(";")
                         if self.seguranca.autenticar(usuario, senha):
                             conn.send(b"LOGIN_OK\n")
                             self.autenticado = True
@@ -74,22 +69,21 @@ class Client:
                             self.autenticado = False
                         continue
 
-                    # ---------- GET MAC ----------
+                    # GET MAC
                     if line == "GET_MAC":
                         conn.send(f"MAC_ADDRESS;{self.mac}\n".encode())
                         continue
 
                     if not self.autenticado:
-                        continue  # ignora comandos até login OK
+                        continue
 
-                    # ---------- Teclado ----------
+                    # Teclado
                     if line == "KEYBOARD_START":
                         keyboard_active = True
                         continue
                     if line == "KEYBOARD_STOP":
                         keyboard_active = False
                         continue
-
                     if keyboard_active and line.startswith("KEY;"):
                         try:
                             _, action, key = line.split(";", 2)
@@ -106,14 +100,13 @@ class Client:
                         except:
                             pass
 
-                    # ---------- Mouse ----------
+                    # Mouse
                     if line == "MOUSE_START":
                         mouse_active = True
                         continue
                     if line == "MOUSE_STOP":
                         mouse_active = False
                         continue
-
                     if mouse_active and line.startswith("MOUSE;"):
                         try:
                             parts = line.split(";")
@@ -134,7 +127,6 @@ class Client:
                         except:
                             pass
 
-                    # ---------- Encerrar ----------
                     if line == "SESSION_END":
                         keyboard_active = False
                         mouse_active = False
@@ -145,14 +137,12 @@ class Client:
                 break
         conn.close()
 
-    # Start
     def start(self):
         threading.Thread(target=self.send_broadcast, daemon=True).start()
         threading.Thread(target=self.tcp_server, daemon=True).start()
         print(f"[Cliente] TCP_PORT={self.tcp_port} | MAC={self.mac}")
         while self.running:
             time.sleep(5)
-
 
 if __name__ == "__main__":
     Client().start()
