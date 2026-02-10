@@ -30,7 +30,7 @@ Construir um sistema cliente/servidor para inventário e monitoramento de comput
 - [ ] Comunicação segura com criptografia ponta a ponta  
 - [ ] Mecanismos de integridade das mensagens  
 - [ ] Autenticação com controle de acesso por perfil  
-- [x] Auditoria no servidor (registro de ações com data e hora)  
+- [ ] Auditoria no servidor (registro de ações com data e hora)  
 
 
 ## 5. Bônus
