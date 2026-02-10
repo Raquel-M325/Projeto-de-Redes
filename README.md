@@ -82,6 +82,234 @@ O projeto foi desenvolvido seguindo o paradigma de **Orientação a Objetos**, c
 - 📦 Módulos separados para cada funcionalidade
 
 
+### 🧩 Organização do Código – Cliente (`cliente.py`)
+
+O arquivo `cliente.py` concentra toda a lógica executada em cada máquina cliente do sistema.
+
+---
+
+#### 🧑‍💻 Classe `Client`
+A classe `Client` representa o cliente da aplicação e é responsável por:
+
+- Inicializar o cliente e definir sua porta TCP
+- Gerenciar a execução contínua do programa
+- Centralizar comunicação, coleta de dados e execução de comandos
+
+---
+
+#### 🔧 Método `__init__`
+Inicializa o cliente definindo:
+- Porta TCP aleatória para comunicação
+- Estado de execução do cliente
+- Endereço MAC da máquina
+
+Essas informações são usadas para identificação pelo servidor.
+
+---
+
+#### 📡 Método `send_broadcast`
+Responsável pela **descoberta automática** do cliente na rede.
+
+- Envia mensagens periódicas via **UDP broadcast**
+- Informa ao servidor a porta TCP disponível
+- Permite que o servidor detecte clientes sem configuração manual
+
+---
+
+#### 🔗 Método `tcp_server`
+Cria um **servidor TCP interno** no cliente.
+
+- Fica escutando conexões do servidor
+- Aceita múltiplas conexões simultâneas usando threads
+- Encaminha cada conexão para tratamento específico
+
+---
+
+#### 🔄 Método `handle_tcp_connection`
+Gerencia toda a comunicação TCP com o servidor.
+
+Esse método:
+- Interpreta comandos recebidos
+- Controla o início e fim do controle de teclado e mouse
+- Responde solicitações como envio do MAC e inventário
+- Mantém a sessão ativa até o encerramento
+
+---
+
+#### ⌨️ Controle de Teclado
+Dentro de `handle_tcp_connection`, o cliente:
+- Recebe eventos de teclado
+- Executa pressionamento e liberação de teclas
+- Ativa ou desativa o controle conforme comandos recebidos
+
+---
+
+#### 🖱️ Controle de Mouse
+Também em `handle_tcp_connection`, o cliente:
+- Executa comandos de movimento, clique e rolagem do mouse
+- Responde dinamicamente aos comandos do servidor
+- Encerra a sessão conforme solicitado
+
+---
+
+#### 📊 Método `coletar_dados`
+Responsável pela **coleta de inventário** do sistema.
+
+Retorna informações como:
+- Número de núcleos de CPU
+- Memória RAM disponível
+- Espaço livre em disco
+- Interfaces de rede com IP, status e tipo
+- Sistema operacional
+
+Os dados são enviados ao servidor em formato estruturado.
+
+---
+
+#### 🌐 Método `identificar_tipo`
+Classifica cada interface de rede como:
+- Loopback
+- Wi-Fi
+- Ethernet
+
+Essa classificação auxilia na organização das informações coletadas.
+
+---
+
+#### ▶️ Método `start`
+Inicia a execução do cliente.
+
+- Dispara as threads de broadcast UDP e servidor TCP
+- Mantém o cliente ativo em execução contínua
+
+---
+
+📌 *Essa estrutura garante organização clara, modularidade e fácil manutenção do código do cliente.*
+
+### 🧩 Organização do Código – Servidor (`servidor.py`)
+
+O arquivo `servidor.py` representa o núcleo central do sistema.  
+Ele é responsável por **descobrir clientes na rede**, **gerenciar conexões**, **solicitar dados**, **consolidar informações** e **executar ações remotas**.
+
+---
+
+#### 🗂️ Classe `ClientInfo`
+A classe `ClientInfo` representa um cliente conhecido pelo servidor.
+
+Ela armazena:
+- Endereço IP do cliente
+- Porta TCP utilizada
+- Última vez que o cliente foi visto
+- Última mensagem recebida
+- Endereço MAC
+- Dados de inventário do cliente
+
+Essa classe facilita o gerenciamento e a visualização dos clientes conectados.
+
+---
+
+#### 🖥️ Classe `DiscoveryServer`
+A classe `DiscoveryServer` centraliza todas as funcionalidades do servidor.
+
+Ela é responsável por:
+- Detectar clientes automaticamente
+- Manter a lista de clientes ativos
+- Solicitar informações dos clientes
+- Executar controle remoto
+- Consolidar e exportar dados
+
+---
+
+#### 📡 Método `listen_broadcasts`
+Responsável pela **descoberta automática de clientes**.
+
+- Escuta mensagens UDP na porta de broadcast
+- Identifica novos clientes a partir das mensagens recebidas
+- Atualiza o tempo de atividade dos clientes já conhecidos
+- Registra automaticamente clientes recém-descobertos
+
+---
+
+#### 🔗 Método `ask_mac_tcp`
+Solicita o **endereço MAC** de um cliente específico.
+
+- Abre uma conexão TCP com o cliente
+- Envia o comando de solicitação
+- Armazena o MAC recebido na estrutura do cliente
+
+---
+
+#### ⌨️ Método `control_keyboard`
+Implementa o **controle remoto de teclado**.
+
+- Captura eventos do teclado local do servidor
+- Envia esses eventos via TCP para o cliente selecionado
+- Permite encerrar a sessão pressionando a tecla ESC
+
+---
+
+#### 🖱️ Método `control_mousepad`
+Implementa o **controle remoto de mouse**.
+
+- Captura movimentos, cliques e rolagem do mouse
+- Envia os comandos em tempo real ao cliente
+- Encerra a sessão ao pressionar o botão do meio do mouse
+
+---
+
+#### 📊 Método `ask_inventory_tcp`
+Responsável por solicitar o **inventário do sistema** de um cliente.
+
+- Envia o comando de coleta
+- Recebe os dados em formato JSON
+- Armazena as informações no objeto `ClientInfo`
+
+---
+
+#### 📈 Método `consolidado`
+Realiza a **consolidação dos dados coletados**.
+
+- Calcula médias de CPU, memória RAM e disco
+- Considera apenas clientes que responderam à coleta
+- Exibe os resultados diretamente no terminal
+
+---
+
+#### 📁 Método `export_csv`
+Responsável pela **exportação dos dados**.
+
+- Gera um arquivo `relatorio.csv`
+- Inclui dados principais de cada cliente
+- Permite análise externa dos resultados coletados
+
+---
+
+#### 📋 Método `menu`
+Implementa o **menu interativo do servidor**.
+
+Por meio dele é possível:
+- Listar clientes conectados
+- Solicitar MAC
+- Controlar teclado e mouse
+- Coletar inventário
+- Visualizar médias consolidadas
+- Exportar relatórios
+
+---
+
+#### ▶️ Método `start`
+Inicializa o servidor.
+
+- Inicia a escuta de broadcasts em uma thread separada
+- Ativa o menu interativo principal
+- Mantém o servidor em execução contínua
+
+---
+
+📌 *Essa estrutura garante centralização do controle, organização clara e facilidade de expansão do servidor.*
+
+
+
 ### 🔄 Fluxo de Funcionamento
 1️⃣ Cliente inicia e anuncia presença na rede  
 2️⃣ Servidor detecta automaticamente  
