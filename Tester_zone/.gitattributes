@@ -1,3 +1,0 @@
-__pycache__/
-*.pyc
-*.txt filter=lfs diff=lfs merge=lfs -text
