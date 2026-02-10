@@ -325,4 +325,4 @@ Inicializa o servidor.
 
 ## Considerações Finais
 O projeto atende aos requisitos funcionais e arquiteturais propostos, incluindo comunicação em rede, descoberta automática, coleta de métricas e ações remotas.  
-Os requisitos de segurança encontram-se parcialmente atendidos, ficando como ponto de melhoria futura.
+Os requisitos de segurança encontram-se não atendidos, ficando como ponto de melhoria futura.
